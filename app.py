@@ -3,91 +3,111 @@ import pandas as pd
 from datetime import datetime
 import os
 
-# Configuração para visualização mobile
-st.set_page_config(page_title="Raphael Gym Log", layout="centered")
+# Configuração Mobile
+st.set_page_config(page_title="Treino Raphael", layout="centered")
 
-# Título e Estilo
-st.title("💪 Raphael: Tônus & Saúde")
-st.markdown("---")
-
-# Banco de Dados de Exercícios e Substitutos
-planilha_treino = {
+# Dicionário mestre com Metas (Séries e Reps)
+dados_treino = {
     "TREINO A (Superior)": {
-        "Supino Máquina": "Supino Halteres (Pegada Neutra)",
-        "Remada Baixa Triângulo": "Puxada Pegada Supinada",
-        "Puxada Alta Aberta": "Puxada com Triângulo",
-        "Elevação Lateral": "Elevação Lateral no Cabo",
-        "Rosca Direta Barra W": "Rosca Martelo Halteres",
-        "Tríceps Corda": "Tríceps Barra W no Cabo"
+        "Supino Máquina Sentado": {"sub": "Supino Halteres (Neutro)", "sets": 3, "reps": 15},
+        "Remada Baixa Triângulo": {"sub": "Puxada Pegada Supinada", "sets": 3, "reps": 15},
+        "Puxada Alta Aberta": {"sub": "Puxada com Triângulo", "sets": 3, "reps": 15},
+        "Elevação Lateral": {"sub": "Elevação Lateral no Cabo", "sets": 3, "reps": 15},
+        "Rosca Direta Barra W": {"sub": "Rosca Martelo Halteres", "sets": 3, "reps": 12},
+        "Tríceps na Polia (Corda)": {"sub": "Tríceps Barra W no Cabo", "sets": 3, "reps": 15}
     },
     "TREINO B (Inferior/Core)": {
-        "Leg Press (45 ou Horiz.)": "Agachamento Goblet (Halter)",
-        "Agachamento no Smith": "Cadeira Adutora",
-        "Cadeira Extensora": "Agachamento Livre (Carga Baixa)",
-        "Cadeira ou Mesa Flexora": "Elevação Pélvica",
-        "Panturrilha em Pé": "Panturrilha no Degrau",
-        "Máquina Abdominal": "Abdominal Infra Solo",
-        "Banco Romano (Lombar)": "Prancha Estática"
+        "Leg Press (45 ou Horiz.)": {"sub": "Agachamento Goblet (Halter)", "sets": 3, "reps": 15},
+        "Agachamento no Smith": {"sub": "Cadeira Adutora", "sets": 3, "reps": 12},
+        "Cadeira Extensora": {"sub": "Agachamento Livre (Baixa Carga)", "sets": 3, "reps": 15},
+        "Cadeira ou Mesa Flexora": {"sub": "Elevação Pélvica", "sets": 3, "reps": 15},
+        "Panturrilha em Pé": {"sub": "Panturrilha no Degrau", "sets": 4, "reps": 15},
+        "Máquina Abdominal": {"sub": "Abdominal Infra no solo", "sets": 3, "reps": 20},
+        "Banco Romano (Lombar)": {"sub": "Prancha Estática", "sets": 3, "reps": 12}
     }
 }
 
-# 1. Seleção do Treino do Dia
-treino_dia = st.radio("Qual o treino de hoje?", list(planilha_treino.keys()), horizontal=True)
+# Inicializar contador de séries na memória do app
+if 'progresso' not in st.session_state:
+    st.session_state.progresso = {}
 
-# 2. Seleção do Exercício
-exercicio_principal = st.selectbox("Selecione o Exercício:", list(planilha_treino[treino_dia].keys()))
-substituto = planilha_treino[treino_dia][exercicio_principal]
+st.title("💪 Raphael: Tônus & Saúde")
 
-# Toggle para registrar se usou o substituto
-usou_substituto = st.checkbox(f"Usei o substituto: {substituto}")
+# 1. Seleção de Treino
+treino_sel = st.selectbox("Treino de hoje:", list(dados_treino.keys()))
+exercicios = dados_treino[treino_sel]
 
-nome_final = substituto if usou_substituto else exercicio_principal
+# 2. Seleção de Exercício
+ex_base = st.selectbox("Exercício:", list(exercicios.keys()))
+info = exercicios[ex_base]
+meta_sets = info['sets']
+meta_reps = info['reps']
 
-# 3. Registro de Carga e Repetições
-st.subheader(f"Registrar: {nome_final}")
+# 3. Gerenciador de Substitutos
+usar_sub = st.checkbox(f"Usar substituto: {info['sub']}")
+nome_final = info['sub'] if usar_sub else ex_base
+
+# Chave única para o contador deste exercício
+chave_ex = f"{treino_sel}_{nome_final}"
+if chave_ex not in st.session_state.progresso:
+    st.session_state.progresso[chave_ex] = 0
+
+# 4. Painel de Controle de Séries
+st.info(f"🎯 **Meta:** {meta_sets} séries de {meta_reps} reps")
+sets_feitos = st.session_state.progresso[chave_ex]
+
+# Barra de progresso visual
+progresso_visual = min(sets_feitos / meta_sets, 1.0)
+st.progress(progresso_visual)
+st.write(f"✅ Série **{sets_feitos}** de **{meta_sets}** concluída(s)")
+
+st.divider()
+
+# 5. Registro da Série Atual
 col1, col2 = st.columns(2)
 with col1:
     peso = st.number_input("Carga (kg)", min_value=0.0, step=0.5, format="%.1f")
 with col2:
-    reps = st.number_input("Repetições", min_value=0, step=1)
+    reps_feitas = st.number_input("Reps feitas", min_value=0, value=meta_reps)
 
-# 4. Monitoramento Articular (Importante para seu histórico)
-sensibilidade = st.select_slider(
-    "Como estão as articulações (Pulsos/Lombar/Joelhos)?",
-    options=["Sem Dor", "Leve Desconforto", "Moderada", "Alerta", "Dor Forte"]
-)
+nota = st.text_input("Nota (ex: dor, esforço 1-10)", "")
 
-nota = st.text_input("Nota adicional (Opcional):", placeholder="Ex: Sentia a lombar no final")
-
-# 5. Lógica de Salvamento
-if st.button("💾 SALVAR SÉRIE"):
+if st.button("💾 REGISTRAR SÉRIE"):
+    # Incrementar contador local
+    st.session_state.progresso[chave_ex] += 1
+    
+    # Salvar no CSV
     novo_log = pd.DataFrame([{
         "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "Treino": treino_dia,
         "Exercicio": nome_final,
         "Peso": peso,
-        "Reps": reps,
-        "Articulacao": sensibilidade,
-        "Obs": nota
+        "Reps": reps_feitas,
+        "Serie_Num": st.session_state.progresso[chave_ex],
+        "Nota": nota
     }])
-
-    # Salva em CSV local (ou cria um se não existir)
-    file_name = "historico_treino_raphael.csv"
+    
+    file_name = "historico_treino.csv"
     if not os.path.isfile(file_name):
         novo_log.to_csv(file_name, index=False)
     else:
         novo_log.to_csv(file_name, mode='a', header=False, index=False)
+    
+    st.rerun() # Atualiza a tela para mostrar o novo número de séries
 
-    st.success(f"Série de {nome_final} salva!")
+# 6. Finalização e Histórico
+st.divider()
+col_left, col_right = st.columns(2)
 
-# 6. Visualização do Histórico
-st.markdown("---")
-if st.checkbox("📊 Ver meu Histórico Recente"):
-    if os.path.isfile("historico_treino_raphael.csv"):
-        df_hist = pd.read_csv("historico_treino_raphael.csv")
-        st.dataframe(df_hist.tail(10), use_container_width=True)  # Mostra as últimas 10 entradas
-    else:
-        st.info("Ainda não há registros salvos.")
+with col_left:
+    if st.button("🏁 Finalizar Treino (Limpar Contadores)"):
+        st.session_state.progresso = {}
+        st.success("Contadores zerados para o próximo treino!")
+        st.rerun()
 
-# 7. Lembrete do Cardio
-st.info("🚴 **Lembrete:** Não esqueça dos 30 min de Elíptico/Bike ao final!")
+with col_right:
+    if st.checkbox("📊 Ver Histórico"):
+        if os.path.isfile("historico_treino.csv"):
+            df = pd.read_csv("historico_treino.csv")
+            st.dataframe(df.tail(15), use_container_width=True)
+
+st.caption("🚴 Lembrete: 30 min de Cardio após a musculação!")
