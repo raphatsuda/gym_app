@@ -6,7 +6,7 @@ import os
 # Configuração Mobile
 st.set_page_config(page_title="Treino Raphael", layout="centered")
 
-# Dicionário mestre com Metas (Séries e Reps)
+# Dicionário mestre com Metas
 dados_treino = {
     "TREINO A (Superior)": {
         "Supino Máquina Sentado": {"sub": "Supino Halteres (Neutro)", "sets": 3, "reps": 15},
@@ -27,56 +27,66 @@ dados_treino = {
     }
 }
 
-# Inicializar contador de séries na memória do app
+# Inicializar memória temporária
 if 'progresso' not in st.session_state:
     st.session_state.progresso = {}
 
 st.title("💪 Raphael: Tônus & Saúde")
 
-# 1. Seleção de Treino
+# 1. Seleção de Treino e Exercício
 treino_sel = st.selectbox("Treino de hoje:", list(dados_treino.keys()))
-exercicios = dados_treino[treino_sel]
+ex_base = st.selectbox("Exercício:", list(dados_treino[treino_sel].keys()))
+info = dados_treino[treino_sel][ex_base]
 
-# 2. Seleção de Exercício
-ex_base = st.selectbox("Exercício:", list(exercicios.keys()))
-info = exercicios[ex_base]
-meta_sets = info['sets']
-meta_reps = info['reps']
-
-# 3. Gerenciador de Substitutos
 usar_sub = st.checkbox(f"Usar substituto: {info['sub']}")
 nome_final = info['sub'] if usar_sub else ex_base
 
-# Chave única para o contador deste exercício
+# 2. BUSCA DO ÚLTIMO REGISTRO (Nova Funcionalidade)
+file_name = "historico_treino.csv"
+last_weight = 0.0
+last_reps = info['reps']
+
+if os.path.isfile(file_name):
+    df_hist = pd.read_csv(file_name)
+    # Filtra apenas as entradas deste exercício específico
+    historico_ex = df_hist[df_hist['Exercicio'] == nome_final]
+    
+    if not historico_ex.empty:
+        # Pega a última linha registrada para este exercício
+        ultimo_log = historico_ex.iloc[-1]
+        last_weight = float(ultimo_log['Peso'])
+        last_reps = int(ultimo_log['Reps'])
+        
+        # Exibe um alerta visual com o peso anterior
+        st.warning(f"⬅️ **Último Treino:** {last_weight}kg x {last_reps} reps")
+    else:
+        st.info("🆕 Primeiro treino registrado para este exercício!")
+
+st.divider()
+
+# 3. Painel de Controle de Séries
 chave_ex = f"{treino_sel}_{nome_final}"
 if chave_ex not in st.session_state.progresso:
     st.session_state.progresso[chave_ex] = 0
 
-# 4. Painel de Controle de Séries
-st.info(f"🎯 **Meta:** {meta_sets} séries de {meta_reps} reps")
+meta_sets = info['sets']
 sets_feitos = st.session_state.progresso[chave_ex]
+st.write(f"🎯 Meta: {meta_sets} séries | Concluídas: **{sets_feitos}**")
+st.progress(min(sets_feitos / meta_sets, 1.0))
 
-# Barra de progresso visual
-progresso_visual = min(sets_feitos / meta_sets, 1.0)
-st.progress(progresso_visual)
-st.write(f"✅ Série **{sets_feitos}** de **{meta_sets}** concluída(s)")
-
-st.divider()
-
-# 5. Registro da Série Atual
+# 4. Registro da Série
 col1, col2 = st.columns(2)
 with col1:
-    peso = st.number_input("Carga (kg)", min_value=0.0, step=0.5, format="%.1f")
+    # O valor padrão agora é o peso que você usou no último treino!
+    peso = st.number_input("Peso (kg)", min_value=0.0, value=last_weight, step=0.5, format="%.1f")
 with col2:
-    reps_feitas = st.number_input("Reps feitas", min_value=0, value=meta_reps)
+    # O valor padrão de reps também puxa o último registro
+    reps_feitas = st.number_input("Reps feitas", min_value=0, value=last_reps)
 
-nota = st.text_input("Nota (ex: dor, esforço 1-10)", "")
+nota = st.text_input("Nota / Percepção de esforço", "")
 
 if st.button("💾 REGISTRAR SÉRIE"):
-    # Incrementar contador local
     st.session_state.progresso[chave_ex] += 1
-    
-    # Salvar no CSV
     novo_log = pd.DataFrame([{
         "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "Exercicio": nome_final,
@@ -86,28 +96,18 @@ if st.button("💾 REGISTRAR SÉRIE"):
         "Nota": nota
     }])
     
-    file_name = "historico_treino.csv"
     if not os.path.isfile(file_name):
         novo_log.to_csv(file_name, index=False)
     else:
         novo_log.to_csv(file_name, mode='a', header=False, index=False)
-    
-    st.rerun() # Atualiza a tela para mostrar o novo número de séries
+    st.rerun()
 
-# 6. Finalização e Histórico
+# 5. Finalização e Histórico
 st.divider()
-col_left, col_right = st.columns(2)
+if st.button("🏁 Finalizar Treino (Zerar Contadores)"):
+    st.session_state.progresso = {}
+    st.rerun()
 
-with col_left:
-    if st.button("🏁 Finalizar Treino (Limpar Contadores)"):
-        st.session_state.progresso = {}
-        st.success("Contadores zerados para o próximo treino!")
-        st.rerun()
-
-with col_right:
-    if st.checkbox("📊 Ver Histórico"):
-        if os.path.isfile("historico_treino.csv"):
-            df = pd.read_csv("historico_treino.csv")
-            st.dataframe(df.tail(15), use_container_width=True)
-
-st.caption("🚴 Lembrete: 30 min de Cardio após a musculação!")
+if st.checkbox("📊 Ver Tabela Completa"):
+    if os.path.isfile(file_name):
+        st.dataframe(pd.read_csv(file_name).tail(20), use_container_width=True)
